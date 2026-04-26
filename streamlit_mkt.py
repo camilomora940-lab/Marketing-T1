@@ -1,3 +1,5 @@
+from io import StringIO
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -27,7 +29,7 @@ st.sidebar.header("Panel de Control")
 years = st.sidebar.slider("Periodo de Análisis", 1920, 2016, (2000, 2016))
 
 # 2. Filtro de Géneros
-generos = ['Action', 'Adventure', 'Animation', 'Comedy', 'Drama', 'Horror', 'Romance', 'Science_Fiction', 'Thriller']
+generos = ['Action', 'Adventure', 'Animation', 'Comedy', 'Drama', 'Horror', 'Romance', 'Science_Fiction', 'Thriller','Fantasy', 'Mystery', 'Documentary', 'Family', 'War', 'Music', 'History', 'Western', 'TV_Movie', 'Foreign','Crime','Otro']
 sel_generos = st.sidebar.multiselect("Géneros en Pantalla", generos, default=generos)
 
 # 3. Filtro de Presupuesto
@@ -60,7 +62,7 @@ with tabs[0]:
     )
     # Resaltar el top 10
     fig_top = px.scatter(df_filtered, x="budget", y="revenue", opacity=0.3,
-                         hover_name="title", title="Top 10 Revenue vs Resto del Dataset")
+                         hover_name="title", title="Top 10 Recaudación vs Resto del Dataset")
     fig_top.update_traces(marker=dict(color='gray')) # Todo a gris primero
     # Añadir los colores del Top 10 individualmente
     for i, row in top_10.iterrows():
@@ -68,17 +70,58 @@ with tabs[0]:
                                      mode='markers', marker=dict(size=12),
                                      name=row['title']))
     st.plotly_chart(fig_top, use_container_width=True)
+st.header("Análisis de Rentabilidad por Género")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Distribución de Presupuesto")
-        fig_hist_b = px.histogram(df_filtered, x="budget", nbins=30, color_discrete_sequence=['#003366'])
-        st.plotly_chart(fig_hist_b, use_container_width=True)
-    
-    with col2:
-        st.subheader("Distribución de Ingresos")
-        fig_hist_r = px.histogram(df_filtered, x="revenue", nbins=30, color_discrete_sequence=['#E5A823'])
-        st.plotly_chart(fig_hist_r, use_container_width=True)
+# 1. Lista completa de géneros (Incluyendo Foreign, TV_Movie y Otro)
+generos_lista = [
+    'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
+    'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 
+    'Horror', 'Music', 'Mystery', 'Romance', 'Science_Fiction', 
+    'Thriller', 'War', 'Western', 'Foreign', 'TV_Movie', 'Otro'
+]
+
+# 2. Cálculo de promedios
+promedios = []
+for g in generos_lista:
+    if g in df_filtered.columns:
+        sub_df = df_filtered[df_filtered[g] == 1]
+        if not sub_df.empty:
+            mean_rev = sub_df['revenue'].mean()
+            # Contamos cuántas películas hay para dar contexto en el hover
+            count = len(sub_df)
+            promedios.append({'Genero': g, 'Revenue_Promedio': mean_rev, 'Cantidad': count})
+
+df_promedios = pd.DataFrame(promedios).sort_values('Revenue_Promedio', ascending=True)
+
+# 3. Gráfico de Barras Horizontales
+fig_generos = px.bar(
+    df_promedios, 
+    x='Revenue_Promedio', 
+    y='Genero',
+    orientation='h',
+    title="<b>Revenue Promedio por Género (Incluyendo Nichos)</b>",
+    labels={'Revenue_Promedio': 'Revenue Promedio (USD)', 'Genero': 'Género'},
+    color='Revenue_Promedio',
+    color_continuous_scale='Blues',
+    text_auto='.2s',
+    hover_data={'Cantidad': True, 'Revenue_Promedio': ':$,.0f'}
+)
+
+# Ajustes para que los géneros de menor recaudación se vean bien
+fig_generos.update_layout(
+    height=900, # Aumentamos un poco más el alto para las 3 nuevas filas
+    margin=dict(l=150, r=50), 
+    xaxis_title="Revenue Promedio (USD)",
+    yaxis_title="",
+    coloraxis_showscale=False,
+    # Si la diferencia entre Adventure y TV_Movie es demasiada, 
+    # puedes descomentar la siguiente línea para usar escala logarítmica:
+    # log_x=True 
+)
+
+fig_generos.update_traces(textposition='outside', cliponaxis=False)
+
+st.plotly_chart(fig_generos, use_container_width=True, key="grafico_generos_completo")
 
 # --- TAB 2: TRANSFORMACIÓN LOGARÍTMICA ---
 with tabs[1]:
@@ -96,44 +139,42 @@ with tabs[1]:
         fig_log = px.scatter(df_filtered, x="log_budget", y="log_revenue", trendline="ols",
                              color_discrete_sequence=['#003366'])
         st.plotly_chart(fig_log, use_container_width=True)
-    
-    with c2:
-        st.subheader("Después (Log-Log)")
-        fig_log = px.scatter(df_filtered, x="log_budget", y="log_revenue", trendline="ols",
-                             color_discrete_sequence=['#003366'])
-        st.plotly_chart(fig_log, use_container_width=True)
+    st.markdown("---")
+    st.subheader("Estimación del Modelo Seleccionado")
+    genre_cols = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
+              'Documentary', 'Otro', 'Family', 'Fantasy', 'Foreign', 
+              'History', 'Horror', 'Music', 'Mystery', 'Romance', 
+              'Science_Fiction', 'TV_Movie', 'Thriller', 'War', 'Western']
 
-with tabs[1]:
-    st.header("Resultados de la Regresión (Modelo 3)")
-    
-    # Definición de la fórmula según tu modelo 3
-    # Nota: Ajusta 'compania_principal_agrupadas2' al nombre real en tu CSV
-    formula3 = 'log_revenue ~ log_budget + log_vote_count + vote_average + is_english + C(release_month)'
+    genre_terms = ' + '.join(genre_cols)
+    formula3 = f'log_revenue ~  log_budget + log_vote_count + vote_average  + is_english + C(release_month) + release_year + {genre_terms}'
     
     try:
         modelo3 = smf.ols(formula=formula3, data=df_filtered).fit()
         
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.metric("R-Squared", f"{modelo3.rsquared:.3f}")
-            st.write("**Coeficientes Críticos:**")
-            st.write(f"Budget: `{modelo3.params['log_budget']:.4f}`")
-            st.write(f"Votos: `{modelo3.params['log_vote_count']:.4f}`")
+        m_col1, m_col2 = st.columns([1, 2])
+        with m_col1:
+            st.metric("R-Squared (Ajustado)", f"{modelo3.rsquared_adj:.3f}")
+            st.metric("Número de Observaciones", f"{int(modelo3.nobs)}")
+            st.metric("F-Estadístico", f"{modelo3.fvalue:.2f}")
+            st.write("**Elasticidades Encontradas:**")
+            st.info(f"Budget: **{modelo3.params['log_budget']:.4f}**")
+            st.info(f"Votos: **{modelo3.params['log_vote_count']:.4f}**")
             
-            # Alerta de significancia
-            p_val = modelo3.pvalues['log_budget']
-            if p_val < 0.05:
-                st.success(f"Presupuesto es significativo (p={p_val:.3f})")
+            if modelo3.pvalues['log_budget'] < 0.05:
+                st.success("Presupuesto Estadísticamente Significativo")
             else:
-                st.warning("Presupuesto no es significativo con estos filtros.")
+                st.warning("Presupuesto No Significativo")
 
-        with c2:
-            st.text("Resumen de Coeficientes (Statsmodels)")
-            st.write(modelo3.summary().tables[1])
+        with m_col2:
+            st.write("**Tabla de Coeficientes:**")
+            # SOLUCIÓN StringIO para evitar el error de [Errno 2]
+            tabla_html = modelo3.summary().tables[1].as_html()
+            df_coef = pd.read_html(StringIO(tabla_html), header=0, index_col=0)[0]
+            st.dataframe(df_coef, use_container_width=True)
             
     except Exception as e:
-        st.error(f"Error al correr el modelo: Selecciona más datos. (Detalle: {e})")
-
+        st.error(f"Error en la regresión: {e}. Intenta ajustar los filtros para tener más datos.")
 with tabs[2]:
     st.header("Cálculo de ROI y Elasticidad Marginal")
     
