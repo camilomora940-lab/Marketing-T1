@@ -47,7 +47,7 @@ df_filtered = df[mask].copy()
 st.title("Trabajo 1 - Estimación de Demanda en la Industria Cinematográfica")
 st.markdown(f"**Muestra actual:** {df_filtered.shape[0]} películas filtradas.")
 
-tabs = st.tabs(["Visualización de Datos", "Modelo Econométrico", "Análisis de ROI"])
+tabs = st.tabs(["Visualización de Datos", "Modelo Regresión lineal", "Análisis de ROI"])
 
 with tabs[0]:
     st.header("Análisis de Revenue y Distribuciones")
@@ -70,31 +70,22 @@ with tabs[0]:
                                      mode='markers', marker=dict(size=12),
                                      name=row['title']))
     st.plotly_chart(fig_top, use_container_width=True)
-st.header("Análisis de Rentabilidad por Género")
-
-# 1. Lista completa de géneros (Incluyendo Foreign, TV_Movie y Otro)
-generos_lista = [
+    st.header("Análisis de Rentabilidad por Género")
+    generos_lista = [
     'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
     'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 
     'Horror', 'Music', 'Mystery', 'Romance', 'Science_Fiction', 
-    'Thriller', 'War', 'Western', 'Foreign', 'TV_Movie', 'Otro'
-]
-
-# 2. Cálculo de promedios
-promedios = []
-for g in generos_lista:
-    if g in df_filtered.columns:
-        sub_df = df_filtered[df_filtered[g] == 1]
-        if not sub_df.empty:
-            mean_rev = sub_df['revenue'].mean()
-            # Contamos cuántas películas hay para dar contexto en el hover
-            count = len(sub_df)
-            promedios.append({'Genero': g, 'Revenue_Promedio': mean_rev, 'Cantidad': count})
-
-df_promedios = pd.DataFrame(promedios).sort_values('Revenue_Promedio', ascending=True)
-
-# 3. Gráfico de Barras Horizontales
-fig_generos = px.bar(
+    'Thriller', 'War', 'Western', 'Foreign', 'TV_Movie', 'Otro']
+    promedios = []
+    for g in generos_lista:
+        if g in df_filtered.columns:
+            sub_df = df_filtered[df_filtered[g] == 1]
+            if not sub_df.empty:
+                mean_rev = sub_df['revenue'].mean()
+                count = len(sub_df)
+                promedios.append({'Genero': g, 'Revenue_Promedio': mean_rev, 'Cantidad': count})
+    df_promedios = pd.DataFrame(promedios).sort_values('Revenue_Promedio', ascending=True)
+    fig_generos = px.bar(
     df_promedios, 
     x='Revenue_Promedio', 
     y='Genero',
@@ -106,9 +97,7 @@ fig_generos = px.bar(
     text_auto='.2s',
     hover_data={'Cantidad': True, 'Revenue_Promedio': ':$,.0f'}
 )
-
-# Ajustes para que los géneros de menor recaudación se vean bien
-fig_generos.update_layout(
+    fig_generos.update_layout(
     height=900, # Aumentamos un poco más el alto para las 3 nuevas filas
     margin=dict(l=150, r=50), 
     xaxis_title="Revenue Promedio (USD)",
@@ -118,10 +107,53 @@ fig_generos.update_layout(
     # puedes descomentar la siguiente línea para usar escala logarítmica:
     # log_x=True 
 )
+    fig_generos.update_traces(textposition='outside', cliponaxis=False)
+    st.plotly_chart(fig_generos, use_container_width=True, key="grafico_generos_completo")
+    #ahora otro gráfico con lo mismo pero logaritmico para ver mejor las diferencias entre los géneros con menor revenue
+    fig_generos_log = px.bar(df_promedios, x='Revenue_Promedio', y='Genero', orientation='h',
+                             title="<b>Revenue Promedio por Género (Escala Logarítmica)</b>",
+                             labels={'Revenue_Promedio': 'Revenue Promedio (USD)', 'Genero': 'Género'},
+                             color='Revenue_Promedio', color_continuous_scale='Blues',
+                                text_auto='.2s', log_x=True, hover_data={'Cantidad': True, 'Revenue_Promedio': ':$,.0f'})
+    fig_generos_log.update_layout(
+        height=900,
+        margin=dict(l=150, r=50),
+        xaxis_title="Revenue Promedio (USD, Escala Logarítmica)",
+        yaxis_title="",
+        coloraxis_showscale=False
+    )
+    fig_generos_log.update_traces(textposition='outside', cliponaxis=False)
+    st.plotly_chart(fig_generos_log, use_container_width=True, key="grafico_generos_log")
 
-fig_generos.update_traces(textposition='outside', cliponaxis=False)
-
-st.plotly_chart(fig_generos, use_container_width=True, key="grafico_generos_completo")
+    st.header("Análisis de las Top 10 Productoras")
+    col_prod = 'compania_principal_agrupadas2'
+    if col_prod in df_filtered.columns:
+        df_top_prod = df_filtered.groupby(col_prod).agg({'revenue': 'mean','title': 'count'}).reset_index()
+        df_top_prod.columns = ['Productora', 'Revenue_Promedio', 'Cantidad_Peliculas']
+        df_top_10_prod = df_top_prod.sort_values('Revenue_Promedio', ascending=False).head(10)
+        df_top_10_prod = df_top_10_prod.sort_values('Revenue_Promedio', ascending=True)
+        fig_top_prod = px.bar(
+            df_top_10_prod, x='Revenue_Promedio', y='Productora',orientation='h',title="<b>Top 10 Productoras con Mayor Revenue Promedio</b>",
+            labels={'Revenue_Promedio': 'Revenue Promedio (USD)', 'Productora': 'Compañía'},
+            color='Revenue_Promedio',
+            color_continuous_scale='GnBu', # Escala de verdes/azules
+            text_auto='.3s', # Muestra el valor abreviado (ej: 1.2B o 450M)
+            hover_data={'Cantidad_Peliculas': True}
+        )
+        fig_top_prod.update_layout(
+            height=600,
+            margin=dict(l=200),
+            xaxis_title="Revenue Promedio (USD)",
+            yaxis_title="",
+            coloraxis_showscale=False
+        )
+        fig_top_prod.update_traces(textposition='outside', cliponaxis=False)
+        st.plotly_chart(fig_top_prod, use_container_width=True, key="grafico_top_10_prod")
+        top_empresa = df_top_10_prod.iloc[-1]['Productora']
+        top_valor = df_top_10_prod.iloc[-1]['Revenue_Promedio']
+        st.info(f"💡 **Insight de Mercado:** La productora **{top_empresa}** lidera el ranking con una recaudación promedio de **${top_valor/1e6:.1f}M** por película en el periodo seleccionado.")
+    else:
+        st.warning("No se encontró la columna de productoras agrupadas.")
 
 # --- TAB 2: TRANSFORMACIÓN LOGARÍTMICA ---
 with tabs[1]:
