@@ -154,6 +154,36 @@ with tabs[0]:
         st.info(f"💡 **Insight de Mercado:** La productora **{top_empresa}** lidera el ranking con una recaudación promedio de **${top_valor/1e6:.1f}M** por película en el periodo seleccionado.")
     else:
         st.warning("No se encontró la columna de productoras agrupadas.")
+        
+    st.header("Películas Estrella por Productora")
+    st.markdown("Estas son las películas con mayor recaudación de cada una de las Top 10 productoras.")
+    # 1. Obtenemos los nombres de las Top 10 productoras (reutilizando el cálculo anterior)
+    top_10_nombres = df_top_10_prod['Productora'].tolist()
+    mejores_peliculas = []
+    genre_cols_2= ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
+              'Documentary', 'Otro', 'Family', 'Fantasy', 'Foreign', 
+              'History', 'Horror', 'Music', 'Mystery', 'Romance', 
+              'Science_Fiction', 'TV_Movie', 'Thriller', 'War', 'Western']
+    for prod in top_10_nombres:
+        peli_top = df_filtered[df_filtered[col_prod] == prod].sort_values('revenue', ascending=False).iloc[0]
+        generos_asociados = [g for g in genre_cols_2 if g in peli_top and peli_top[g] == 1]
+        generos_texto= ", ".join(generos_asociados) if generos_asociados else "Sin Género Específico"
+        mejores_peliculas.append({'Productora': prod,
+            'Pelicula': peli_top['title'],
+            'Revenue': peli_top['revenue'],
+            'Presupuesto': peli_top['budget'],
+            'Generos': generos_texto})
+    df_estrellas=pd.DataFrame(mejores_peliculas).sort_values('Revenue', ascending=False)
+    colms=st.columns(5)
+    for i,row in df_estrellas.head(5).iterrows():
+        with colms[i%5]:
+            st.subheader(f"{row['Productora']}")
+            st.write(f"**Película:** {row['Pelicula']}")
+            st.write(f"**Géneros:** {row['Generos']}")
+            st.write(f"**Revenue:** ${row['Revenue']/1e6:.2f}M")
+            st.write(f"**Presupuesto:** ${row['Presupuesto']/1e6:.2f}M")
+    with st.expander("Ver lista completa de películas líderes"):
+        st.dataframe(df_estrellas[['Productora', 'Pelicula','Generos', 'Revenue']].sort_values('Revenue', ascending=False), use_container_width=True)
 
 # --- TAB 2: TRANSFORMACIÓN LOGARÍTMICA ---
 with tabs[1]:
