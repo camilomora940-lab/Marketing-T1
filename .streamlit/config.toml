@@ -1,1 +1,6 @@
-
+[theme]
+primaryColor = "#003366"          # Color de botones y sliders
+backgroundColor = "#FFFFFF"       # Fondo de la app
+secondaryBackgroundColor = "#F0F2F6" # Color del sidebar
+textColor = "#262730"             # Color de la fuente
+font = "sans serif"               # Opciones: "sans serif", "serif", "monospace"
