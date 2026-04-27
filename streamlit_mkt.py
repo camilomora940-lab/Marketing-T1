@@ -9,13 +9,17 @@ from PIL import Image
 import plotly.graph_objects as go
 import requests
 
-def get_movie_poster(movie_title):
-    api_key = "8f89112bc2feaa6f8f93dcf025a44917"  # Pega aquí tu clave
+def get_movie_poster(movie_title, year=None):
+    api_key = "8f89112bc2feaa6f8f93dcf025a44917"
+    # Si hay año, lo añadimos a la query de búsqueda de la API
     search_url = f"https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={movie_title}"
+    if year:
+        search_url += f"&year={year}"
     
     try:
         response = requests.get(search_url).json()
         if response['results']:
+            # La API devuelve los resultados ordenados por relevancia/popularidad
             poster_path = response['results'][0]['poster_path']
             if poster_path:
                 return f"https://image.tmdb.org/t/p/w500{poster_path}"
@@ -62,11 +66,11 @@ df_filtered = df[mask].copy()
 st.title("Trabajo 1 - Estimación de Demanda en la Industria Cinematográfica")
 st.markdown(f"**Muestra actual:** {df_filtered.shape[0]} películas filtradas.")
 
-tabs = st.tabs(["Visualización de Datos", "Modelo Regresión lineal", "Análisis de ROI"])
+tab_analisis, tab_modelo, tab_simulador = st.tabs(["Analisis de Datos", "Modelo de regresión", "Simulador Estrategico"])
+with tab_analisis:
 
-with tabs[0]:
-    st.title("Análisis de los datos")
-    
+    st.header("Análisis de los datos")
+    st.markdown("---")
     # Replicando la lógica de tu celda de "Top Revenue"
     top_10 = df_filtered.sort_values('revenue', ascending=False).head(10)
     
@@ -85,7 +89,7 @@ with tabs[0]:
                                      mode='markers', marker=dict(size=12),
                                      name=row['title']))
     st.plotly_chart(fig_top, use_container_width=True)
-    st.header("1.-Análisis de Rentabilidad por Género")
+    st.subheader("1.-Análisis de Rentabilidad por Género")
     generos_lista = [
     'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
     'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 
@@ -140,7 +144,7 @@ with tabs[0]:
     fig_generos_log.update_traces(textposition='outside', cliponaxis=False)
     st.plotly_chart(fig_generos_log, use_container_width=True, key="grafico_generos_log")
 
-    st.header("Análisis de las Top 10 Productoras")
+    st.subheader("Análisis de las Top 10 Productoras")
     col_prod = 'compania_principal_agrupadas2'
     if col_prod in df_filtered.columns:
         df_top_prod = df_filtered.groupby(col_prod).agg({'revenue': 'mean','title': 'count'}).reset_index()
@@ -187,6 +191,7 @@ with tabs[0]:
             'Pelicula': peli_top['title'],
             'Revenue': peli_top['revenue'],
             'Presupuesto': peli_top['budget'],
+            'año': peli_top['release_year'],
             'Generos': generos_texto})
     df_estrellas=pd.DataFrame(mejores_peliculas).sort_values('Revenue', ascending=False)
     colms=st.columns(5)
@@ -197,15 +202,15 @@ with tabs[0]:
             st.write(f"**Géneros:** {row['Generos']}")
             st.write(f"**Revenue:** ${row['Revenue']/1e6:.2f}M")
             st.write(f"**Presupuesto:** ${row['Presupuesto']/1e6:.2f}M")
-            poster = get_movie_poster(row['Pelicula'])
+            poster = get_movie_poster(row['Pelicula'],row['año'])
             st.image(poster, caption=row['Pelicula'])
     with st.expander("Ver lista completa de películas líderes"):
         st.dataframe(df_estrellas[['Productora', 'Pelicula','Generos', 'Revenue']].sort_values('Revenue', ascending=False), use_container_width=True)
 # analisis de estacionalidad
-    st.header("Análisis temporal del mercado")
+    st.subheader("Estacionalidad del mercado")
     df_mes = df_filtered.groupby('release_month').agg({'revenue': 'mean', 'title': 'count'}).reset_index()
     df_mes.columns = ['Mes', 'Revenue_Promedio', 'Cantidad_Peliculas']
-    fig_mes = px.bar(df_mes, x='Mes', y='Revenue_Promedio', title="<b>Estacionalidad:Revenue Promedio por Mes de Estreno</b>",
+    fig_mes = px.bar(df_mes, x='Mes', y='Revenue_Promedio', title="<b>Revenue Promedio por Mes de Estreno</b>",
                      labels={'Revenue_Promedio': 'Revenue Promedio (USD)', 'Mes': 'Mes del Año'},
                      color='Revenue_Promedio', color_continuous_scale='OrRd', text_auto='.2s', hover_data={'Cantidad_Peliculas': True})
     fig_mes.update_layout(
@@ -214,72 +219,79 @@ with tabs[0]:
     st.plotly_chart(fig_mes, use_container_width=True, key="grafico_estacionalidad")
 
 # --- TAB 2: TRANSFORMACIÓN LOGARÍTMICA ---
-with tabs[1]:
-    st.header("Justificación de Transformación Logarítmica")
+with tab_modelo:
+    st.header("Transformación Logarítmica")
     st.write("Para corregir el sesgo y cumplir los supuestos de la regresión lineal, transformamos las variables.")
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("Antes (Escala Normal)")
-        fig_raw = px.scatter(df_filtered, x="budget", y="revenue", trendline="ols")
+    var_to_show = st.selectbox("Seleccione Variable a Comparar", 
+                            options=['budget', 'revenue', 'vote_count'],
+                            format_func=lambda x: "Presupuesto" if x=='budget' else ("Ingresos" if x=='revenue' else "Votos"))
+    col_raw, col_log = st.columns(2)
+    with col_raw:
+        st.subheader("Distribución Original (Sesgada)")
+        fig_raw = px.histogram(df_filtered, x=var_to_show, 
+                           nbins=50, 
+                           title=f"Original: {var_to_show}",
+                           color_discrete_sequence=['#EF4444'], # Rojo para indicar sesgo
+                           opacity=0.7)
         st.plotly_chart(fig_raw, use_container_width=True)
-        
-    with c2:
-        st.subheader("Después (Log-Log)")
-        fig_log = px.scatter(df_filtered, x="log_budget", y="log_revenue", trendline="ols",
-                             color_discrete_sequence=['#003366'])
+        st.caption("Nota el 'muro' a la izquierda: la mayoría son películas de bajo presupuesto/ingreso.")
+    with col_log:
+        st.subheader("Distribución Logarítmica (Normalizada)")
+        log_col_name = f"log_{var_to_show}" if f"log_{var_to_show}" in df_filtered.columns else var_to_show
+        fig_log = px.histogram(df_filtered, x=log_col_name, 
+                           nbins=50, 
+                           title=f"Log-Transformada: {log_col_name}",
+                           color_discrete_sequence=['#10B981'], # Verde para indicar normalidad
+                           opacity=0.7)
         st.plotly_chart(fig_log, use_container_width=True)
-    st.markdown("---")
-    st.subheader("Estimación del Modelo Seleccionado")
-    genre_cols = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
+        st.caption("Tras el logaritmo, los datos se distribuyen de forma campana (normal), ideal para el modelo OLS.")
+        st.markdown("---")
+    with st.container():
+        st.subheader("Estimación del Modelo Seleccionado")
+        genre_cols = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
               'Documentary', 'Otro', 'Family', 'Fantasy', 'Foreign', 
               'History', 'Horror', 'Music', 'Mystery', 'Romance', 
               'Science_Fiction', 'TV_Movie', 'Thriller', 'War', 'Western']
-
-    genre_terms = ' + '.join(genre_cols)
-    formula3 = f'log_revenue ~  log_budget + log_vote_count + vote_average  + is_english + C(release_month) + release_year + {genre_terms}'
-    
-    try:
-        modelo3 = smf.ols(formula=formula3, data=df_filtered).fit()
-        
-        m_col1, m_col2 = st.columns([1, 2])
-        with m_col1:
-            st.metric("R-Squared (Ajustado)", f"{modelo3.rsquared_adj:.3f}")
-            st.metric("Número de Observaciones", f"{int(modelo3.nobs)}")
-            st.metric("F-Estadístico", f"{modelo3.fvalue:.2f}")
-            st.write("**Elasticidades Encontradas:**")
-            st.info(f"Budget: **{modelo3.params['log_budget']:.4f}**")
-            st.info(f"Votos: **{modelo3.params['log_vote_count']:.4f}**")
-            
+        genre_terms = ' + '.join(genre_cols)
+        formula3 = f'log_revenue ~  log_budget + log_vote_count + vote_average  + is_english + C(release_month) + release_year + {genre_terms}'
+        try:
+            modelo3 = smf.ols(formula=formula3, data=df_filtered).fit()
+            m_col1, m_col2 = st.columns([1, 2])
+            with m_col1:
+                st.metric("R-Squared (Ajustado)", f"{modelo3.rsquared_adj:.3f}")
+                st.metric("Número de Observaciones", f"{int(modelo3.nobs)}")
+                st.metric("F-Estadístico", f"{modelo3.fvalue:.2f}")
+                st.write("**Elasticidades Encontradas:**")
+                st.info(f"Budget: **{modelo3.params['log_budget']:.4f}**")
+                st.info(f"Votos: **{modelo3.params['log_vote_count']:.4f}**")
             if modelo3.pvalues['log_budget'] < 0.05:
                 st.success("Presupuesto Estadísticamente Significativo")
             else:
                 st.warning("Presupuesto No Significativo")
 
-        with m_col2:
-            st.write("**Tabla de Coeficientes:**")
-            # SOLUCIÓN StringIO para evitar el error de [Errno 2]
-            tabla_html = modelo3.summary().tables[1].as_html()
-            df_coef = pd.read_html(StringIO(tabla_html), header=0, index_col=0)[0]
-            st.dataframe(df_coef, use_container_width=True)
-            
-    except Exception as e:
-        st.error(f"Error en la regresión: {e}. Intenta ajustar los filtros para tener más datos.")
-        #Quiero hacer grafica real vs predicho para el modelo log-log
-    if 'modelo3' in locals():
-        st.subheader("Gráfico de Valores Reales vs Predichos (Log-Log)")
-        df_filtered['pred_log_revenue'] = modelo3.fittedvalues
-        fig_pred = px.scatter(df_filtered, x='log_revenue', y='pred_log_revenue',
-                              title="Valores Reales vs Predichos (Log-Log)",
-                              labels={'log_revenue': 'Log(Revenue Real)', 'pred_log_revenue': 'Log(Revenue Predicho)'},
-                              color_discrete_sequence=['#990000'])
-        fig_pred.add_shape(type='line', x0=df_filtered['log_revenue'].min(), y0=df_filtered['log_revenue'].min(),
-                           x1=df_filtered['log_revenue'].max(), y1=df_filtered['log_revenue'].max(),
-                           line=dict(color='blue', dash='dash'))
-        st.plotly_chart(fig_pred, use_container_width=True)
+            with m_col2:
+                st.write("**Tabla de Coeficientes:**")
+                # SOLUCIÓN StringIO para evitar el error de [Errno 2]
+                tabla_html = modelo3.summary().tables[1].as_html()
+                df_coef = pd.read_html(StringIO(tabla_html), header=0, index_col=0)[0]
+                st.dataframe(df_coef, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error en la regresión: {e}. Intenta ajustar los filtros para tener más datos.")
+        
+        if 'modelo3' in locals():
+            st.subheader("Gráfico de Valores Reales vs Predichos (Log-Log)")
+            df_filtered['pred_log_revenue'] = modelo3.fittedvalues
+            fig_pred = px.scatter(df_filtered, x='log_revenue', y='pred_log_revenue',
+                                  title="Valores Reales vs Predichos (Log-Log)",
+                                  labels={'log_revenue': 'Log(Revenue Real)', 'pred_log_revenue': 'Log(Revenue Predicho)'},
+                                  color_discrete_sequence=['#990000'])
+            fig_pred.add_shape(type='line', x0=df_filtered['log_revenue'].min(), y0=df_filtered['log_revenue'].min(),
+                               x1=df_filtered['log_revenue'].max(), y1=df_filtered['log_revenue'].max(),
+                               line=dict(color='blue', dash='dash'))
+            st.plotly_chart(fig_pred, use_container_width=True)
 
         
-with tabs[2]:
+with tab_simulador:
     st.header("Simulador de Ingresos Estimados")
     st.markdown("Ingresa los parámetros de tu proyecto para obtener una predicción basada en el modelo de regresión.")
 
