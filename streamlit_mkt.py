@@ -8,7 +8,7 @@ import statsmodels.formula.api as smf
 from PIL import Image
 import plotly.graph_objects as go
 # Configuración profesional para la UdeC
-st.set_page_config(page_title="Marketing - Estimación de Demanda", layout="wide")
+st.set_page_config(page_title="Grupo 15 Marketing - Estimación de Demanda", layout="wide")
 
 @st.cache_data
 def load_data():
@@ -23,7 +23,7 @@ df = load_data()
 logo=Image.open("logo.png")
 # --- SIDEBAR: CONTROLES DE LA PRESENTACIÓN ---
 st.sidebar.image(logo, use_container_width=True) # Opcional: logo DII
-st.sidebar.header("Panel de Control")
+st.sidebar.header("Filtros")
 
 # 1. Filtro de Tiempo
 years = st.sidebar.slider("Periodo de Análisis", 1920, 2016, (2000, 2016))
@@ -50,7 +50,7 @@ st.markdown(f"**Muestra actual:** {df_filtered.shape[0]} películas filtradas.")
 tabs = st.tabs(["Visualización de Datos", "Modelo Regresión lineal", "Análisis de ROI"])
 
 with tabs[0]:
-    st.header("Análisis de Revenue y Distribuciones")
+    st.header("Análisis de los datos")
     
     # Replicando la lógica de tu celda de "Top Revenue"
     top_10 = df_filtered.sort_values('revenue', ascending=False).head(10)
@@ -160,7 +160,7 @@ with tabs[0]:
     # 1. Obtenemos los nombres de las Top 10 productoras (reutilizando el cálculo anterior)
     top_10_nombres = df_top_10_prod['Productora'].tolist()
     mejores_peliculas = []
-    genre_cols_2= ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
+    genre_cols_2= ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Drama',
               'Documentary', 'Otro', 'Family', 'Fantasy', 'Foreign', 
               'History', 'Horror', 'Music', 'Mystery', 'Romance', 
               'Science_Fiction', 'TV_Movie', 'Thriller', 'War', 'Western']
@@ -192,7 +192,7 @@ with tabs[1]:
     
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("Antes (Raw Data)")
+        st.subheader("Antes (Escala Normal)")
         fig_raw = px.scatter(df_filtered, x="budget", y="revenue", trendline="ols")
         st.plotly_chart(fig_raw, use_container_width=True)
         
@@ -237,36 +237,124 @@ with tabs[1]:
             
     except Exception as e:
         st.error(f"Error en la regresión: {e}. Intenta ajustar los filtros para tener más datos.")
-with tabs[2]:
-    st.header("Cálculo de ROI y Elasticidad Marginal")
-    
+        #Quiero hacer grafica real vs predicho para el modelo log-log
     if 'modelo3' in locals():
-        e_budget = modelo3.params['log_budget']
-        e_votos = modelo3.params['log_vote_count']
+        st.subheader("Gráfico de Valores Reales vs Predichos (Log-Log)")
+        df_filtered['pred_log_revenue'] = modelo3.fittedvalues
+        fig_pred = px.scatter(df_filtered, x='log_revenue', y='pred_log_revenue',
+                              title="Valores Reales vs Predichos (Log-Log)",
+                              labels={'log_revenue': 'Log(Revenue Real)', 'pred_log_revenue': 'Log(Revenue Predicho)'},
+                              color_discrete_sequence=['#990000'])
+        fig_pred.add_shape(type='line', x0=df_filtered['log_revenue'].min(), y0=df_filtered['log_revenue'].min(),
+                           x1=df_filtered['log_revenue'].max(), y1=df_filtered['log_revenue'].max(),
+                           line=dict(color='blue', dash='dash'))
+        st.plotly_chart(fig_pred, use_container_width=True)
+
         
-        st.info(f"""
-        ### Interpretación de Elasticidades:
-        * **Elasticidad Presupuesto ({e_budget:.2f}):** Por cada 1% de aumento en presupuesto, el ingreso sube un **{e_budget:.2f}%**.
-        * **Elasticidad Votos ({e_votos:.2f}):** Por cada 1% de aumento en votos (engagement), el ingreso sube un **{e_votos:.2f}%**.
-        """)
+with tabs[2]:
+    st.header("Simulador de Ingresos Estimados")
+    st.markdown("Ingresa los parámetros de tu proyecto para obtener una predicción basada en el modelo de regresión.")
+
+    if 'modelo3' in locals():
+        col_input, col_result = st.columns([1, 1])
+
+        with col_input:
+            st.subheader("Configuración del Proyecto")
+            
+            # 1. Presupuesto
+            presupuesto_input = st.number_input("Presupuesto de Producción (USD)", 
+                                               min_value=100000, 
+                                               value=50000000, 
+                                               step=500000)
+            
+            # 2. Selección de Géneros (Multiselect para que el cliente elija el mix)
+            # Nota: El modelo usará el impacto de estos géneros si están incluidos en la fórmula
+            generos_sel = st.multiselect("Géneros de la película", genre_cols_2, default=['Action'])
+            
+            # 3. Idioma
+            idioma_opcion = st.radio("¿Idioma original Inglés?", ["Sí", "No"], horizontal=True)
+            is_english_input = 1 if idioma_opcion == "Sí" else 0
+            
+            # 4. Mes de estreno
+            mes_input = st.slider("Mes de estreno planificado", 1, 12, 6)
+            
+            # 5. Año de estreno (Opcional: si tu modelo no tiene la variable 'year', 
+            # úsalo para contextualizar el análisis de mercado)
+            anio_input = st.number_input("Año de estreno", min_value=2026, max_value=2040, value=2027)
+            
+            # 6. Variables de control (Votos y Calificación promedio de la muestra para simular)
+            st.caption("Variables de control (basadas en promedios históricos)")
+            votos_sim = st.number_input("Votos esperados (Engagement)", value=int(df_filtered['vote_count'].mean()))
+            rating_sim = st.slider("Calificación esperada (Rating)", 1.0, 10.0, 6.5)
+
+        # --- LÓGICA DE PREDICCIÓN ---
+        # Transformamos a logaritmo lo que el modelo requiere
+        log_b_input = np.log(presupuesto_input)
+        log_v_input = np.log(votos_sim)
         
-        # Simulador de ROI
-        st.subheader("Simulador de ROI Marginal")
-        inversion_extra = st.slider("Aumento de Presupuesto (%)", 0, 100, 10)
+        # Crear DataFrame para el modelo con los nombres de variables EXACTOS de tu fórmula
+        df_input_sim = pd.DataFrame({
+            'log_budget': [log_b_input],
+            'log_vote_count': [log_v_input],
+            'vote_average': [rating_sim],
+            'is_english': [is_english_input],
+            'release_month': [float(mes_input)],
+            'release_year': [float(anio_input)],
+        })
+        #añadir los generos seleccionados al df_input_sim
+        for g in genre_cols_2:
+            df_input_sim[g] = 1 if g in generos_sel else 0
+
+        try:
+            # Predicción en escala logarítmica
+            pred_log_revenue = modelo3.predict(df_input_sim)[0]
+            # Convertir de vuelta a dólares reales
+            revenue_estimado = np.exp(pred_log_revenue)
+            utilidad = revenue_estimado - presupuesto_input
+            roi_ratio = revenue_estimado / presupuesto_input
+            
+            with col_result:
+                st.subheader("Resultados de la Simulación")
+                
+                st.metric("Recaudación Estimada", f"${revenue_estimado/1e6:.2f}M")
+                
+                # Color del delta según si hay ganancia o pérdida
+                st.metric("Utilidad Neta Est.", f"${utilidad/1e6:.2f}M", 
+                          delta=f"{roi_ratio:.2f}x ROI", 
+                          delta_color="normal" if utilidad > 0 else "inverse")
+                
+                st.write("---")
+                
+                # Análisis Estratégico
+                st.markdown("### Recomendaciones")
+                
+                if revenue_estimado > presupuesto_input * 2:
+                    st.success("**Potencial Blockbuster:** El modelo estima que los ingresos duplicarán la inversión.")
+                elif revenue_estimado > presupuesto_input:
+                    st.warning("**Punto de Equilibrio:** El proyecto es rentable pero con márgenes ajustados.")
+                else:
+                    st.error("**Riesgo Elevado:** La recaudación estimada no cubre los costos de producción.")
+
+                # Tip sobre el mes de estreno
+                meses_pico = [6, 7, 12] # Meses de verano y navidad
+                if mes_input in meses_pico:
+                    st.info(f"📅 **Ventaja Estacional:** Estrenar en el mes {mes_input} aprovecha periodos de alta demanda histórica.")
+                
+                # Tip sobre idiomas
+                if is_english_input == 0:
+                    st.caption("Nota: Las películas en idiomas distintos al inglés suelen tener una recaudación base menor en el mercado global según los datos.")
+
+        except Exception as e:
+            st.error(f"Error en la simulación: {e}")
+    else:
+        st.warning("Debes ejecutar la regresión en la pestaña anterior para activar el simulador.")
         
-        revenue_promedio = df_filtered['revenue'].mean()
-        budget_promedio = df_filtered['budget'].mean()
-        
-        gasto_extra = budget_promedio * (inversion_extra / 100)
-        ingreso_extra = revenue_promedio * ((inversion_extra * e_budget) / 100)
-        roi_marginal = (ingreso_extra / gasto_extra) if gasto_extra > 0 else 0
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Gasto Extra Est.", f"${gasto_extra/1e6:.2f}M")
-        c2.metric("Ingreso Extra Est.", f"${ingreso_extra/1e6:.2f}M")
-        c3.metric("ROI del Aumento", f"{roi_marginal:.2f}x")
-        
-        st.write(f"**Conclusión:** Por cada $1 adicional invertido en producción, se recuperan **${roi_marginal:.2f}**.")
 
 st.markdown("---")
-st.caption("Trabajo 1 - Marketing 2026 | Universidad de Concepción")
+col_f1, col_f2 = st.columns(2)
+with col_f1:
+    st.caption("Trabajo I - Marketing - DII UdeC 2026")
+with col_f2:
+    st.markdown("<div style='text-align: right; color: gray; font-size: 0.8em;'>"
+                "Grupo 15 : Rocio Arriagada, Diego Fernandez, Martin Lagos, Camila Leiva, Camilo Mora, Hernán Saavedra </div>", 
+                unsafe_allow_html=True)
