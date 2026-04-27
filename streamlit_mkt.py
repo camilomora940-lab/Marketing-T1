@@ -7,6 +7,21 @@ import plotly.express as px
 import statsmodels.formula.api as smf
 from PIL import Image
 import plotly.graph_objects as go
+import requests
+
+def get_movie_poster(movie_title):
+    api_key = "8f89112bc2feaa6f8f93dcf025a44917"  # Pega aquí tu clave
+    search_url = f"https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={movie_title}"
+    
+    try:
+        response = requests.get(search_url).json()
+        if response['results']:
+            poster_path = response['results'][0]['poster_path']
+            if poster_path:
+                return f"https://image.tmdb.org/t/p/w500{poster_path}"
+        return "https://via.placeholder.com/500x750?text=No+Poster"
+    except:
+        return "https://via.placeholder.com/500x750?text=Error+API"
 # Configuración profesional para la UdeC
 st.set_page_config(page_title="Grupo 15 Marketing - Estimación de Demanda", layout="wide")
 
@@ -50,7 +65,7 @@ st.markdown(f"**Muestra actual:** {df_filtered.shape[0]} películas filtradas.")
 tabs = st.tabs(["Visualización de Datos", "Modelo Regresión lineal", "Análisis de ROI"])
 
 with tabs[0]:
-    st.header("Análisis de los datos")
+    st.title("Análisis de los datos")
     
     # Replicando la lógica de tu celda de "Top Revenue"
     top_10 = df_filtered.sort_values('revenue', ascending=False).head(10)
@@ -70,7 +85,7 @@ with tabs[0]:
                                      mode='markers', marker=dict(size=12),
                                      name=row['title']))
     st.plotly_chart(fig_top, use_container_width=True)
-    st.header("Análisis de Rentabilidad por Género")
+    st.header("1.-Análisis de Rentabilidad por Género")
     generos_lista = [
     'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
     'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 
@@ -155,7 +170,7 @@ with tabs[0]:
     else:
         st.warning("No se encontró la columna de productoras agrupadas.")
         
-    st.header("Películas Estrella por Productora")
+    st.subheader("Películas Estrella por Productora")
     st.markdown("Estas son las películas con mayor recaudación de cada una de las Top 10 productoras.")
     # 1. Obtenemos los nombres de las Top 10 productoras (reutilizando el cálculo anterior)
     top_10_nombres = df_top_10_prod['Productora'].tolist()
@@ -182,8 +197,21 @@ with tabs[0]:
             st.write(f"**Géneros:** {row['Generos']}")
             st.write(f"**Revenue:** ${row['Revenue']/1e6:.2f}M")
             st.write(f"**Presupuesto:** ${row['Presupuesto']/1e6:.2f}M")
+            poster = get_movie_poster(row['Pelicula'])
+            st.image(poster, caption=row['Pelicula'])
     with st.expander("Ver lista completa de películas líderes"):
         st.dataframe(df_estrellas[['Productora', 'Pelicula','Generos', 'Revenue']].sort_values('Revenue', ascending=False), use_container_width=True)
+# analisis de estacionalidad
+    st.header("Análisis temporal del mercado")
+    df_mes = df_filtered.groupby('release_month').agg({'revenue': 'mean', 'title': 'count'}).reset_index()
+    df_mes.columns = ['Mes', 'Revenue_Promedio', 'Cantidad_Peliculas']
+    fig_mes = px.bar(df_mes, x='Mes', y='Revenue_Promedio', title="<b>Estacionalidad:Revenue Promedio por Mes de Estreno</b>",
+                     labels={'Revenue_Promedio': 'Revenue Promedio (USD)', 'Mes': 'Mes del Año'},
+                     color='Revenue_Promedio', color_continuous_scale='OrRd', text_auto='.2s', hover_data={'Cantidad_Peliculas': True})
+    fig_mes.update_layout(
+        xaxis=dict(tickmode='array', tickvals=list(range(1, 13)), ticktext=['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']),
+        xaxis_title="Mes del Año")
+    st.plotly_chart(fig_mes, use_container_width=True, key="grafico_estacionalidad")
 
 # --- TAB 2: TRANSFORMACIÓN LOGARÍTMICA ---
 with tabs[1]:
@@ -324,7 +352,6 @@ with tabs[2]:
                           delta_color="normal" if utilidad > 0 else "inverse")
                 
                 st.write("---")
-                
                 # Análisis Estratégico
                 st.markdown("### Recomendaciones")
                 
@@ -348,7 +375,23 @@ with tabs[2]:
             st.error(f"Error en la simulación: {e}")
     else:
         st.warning("Debes ejecutar la regresión en la pestaña anterior para activar el simulador.")
-        
+    with st.expander("Detalles de las formulas"):
+        st.markdown("#### Modelo de regresión log-log")
+        st.write("El modelo predice el logaritmo del ingreso para capturar elasticidades:")
+        st.latex(r"""
+                    \begin{aligned}
+                    \ln(\text{Revenue}) = \beta_0 & + \beta_1 \ln(\text{Budget}) + \beta_2 \ln(\text{Votes}) + \beta_3 (\text{Rating}) \\
+                    & + \beta_4 (\text{Is English}) + \beta_5 (\text{Year}) + \sum_{m=1}^{12} \gamma_m (\text{Month}_m) \\
+                    & + \sum_{g \in \text{Generos}} \delta_g (\text{Género}_g) + \epsilon
+                    \end{aligned}
+                    """)
+        st.write("Para volver a valores monetarios(USD), se aplica la función exponencial al resultado del modelo:")
+        st.latex(r"\text{Revenue} = e^{\widehat{\ln(\text{Revenue})}}")
+        st.markdown("#### Cálculo del Return on Investment (ROI):")
+        st.write("Representa la eficiencia del capital invertido:")
+        st.latex(r"\text{ROI} = \frac{\text{Revenue Estimado}}{\text{Presupuesto Invertido}}")
+        st.info("Un ROI mayor a 1 indica que el proyecto es rentable, mientras que un ROI menor a 1 sugiere una posible pérdida.")
+
 
 st.markdown("---")
 col_f1, col_f2 = st.columns(2)
