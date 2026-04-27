@@ -6,3 +6,4 @@ statsmodels
 scipy
 requests
 lxml
+Pillow
