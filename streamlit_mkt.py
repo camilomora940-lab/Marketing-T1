@@ -193,10 +193,11 @@ with tab_analisis:
             'Presupuesto': peli_top['budget'],
             'año': peli_top['release_year'],
             'Generos': generos_texto})
-    df_estrellas=pd.DataFrame(mejores_peliculas).sort_values('Revenue', ascending=False)
-    colms=st.columns(5)
-    for i,row in df_estrellas.head(5).iterrows():
-        with colms[i%5]:
+    df_estrellas=pd.DataFrame(mejores_peliculas).sort_values('Revenue', ascending=False).head(10)
+    cols_por_fila = 5
+    colms = st.columns(cols_por_fila)
+    for i, (index, row) in enumerate(df_estrellas.iterrows()):
+        with colms[i% cols_por_fila]:
             st.subheader(f"{row['Productora']}")
             st.write(f"**Película:** {row['Pelicula']}")
             st.write(f"**Géneros:** {row['Generos']}")
@@ -204,6 +205,8 @@ with tab_analisis:
             st.write(f"**Presupuesto:** ${row['Presupuesto']/1e6:.2f}M")
             poster = get_movie_poster(row['Pelicula'],row['año'])
             st.image(poster, caption=row['Pelicula'])
+            if i < 5:
+                st.write("")
     with st.expander("Ver lista completa de películas líderes"):
         st.dataframe(df_estrellas[['Productora', 'Pelicula','Generos', 'Revenue']].sort_values('Revenue', ascending=False), use_container_width=True)
 # analisis de estacionalidad
