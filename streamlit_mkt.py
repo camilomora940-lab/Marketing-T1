@@ -311,7 +311,7 @@ with tab_modelo:
             with m_col1:
                 st.metric("R-Squared (Ajustado)", f"{modelo3.rsquared_adj:.3f}")
                 st.metric("Número de Observaciones", f"{int(modelo3.nobs)}")
-                st.metric("F-Estadístico", f"{modelo3.fvalue:.2f}")
+                st.metric("RMSE", f"{np.sqrt(modelo3.mse_resid):.2f}")
                 st.write("**Elasticidades Encontradas:**")
                 st.info(f"Budget: **{modelo3.params['log_budget']:.4f}**")
                 st.info(f"Votos: **{modelo3.params['log_vote_count']:.4f}**")
@@ -340,6 +340,7 @@ with tab_modelo:
                                x1=df_filtered['log_revenue'].max(), y1=df_filtered['log_revenue'].max(),
                                line=dict(color='blue', dash='dash'))
             st.plotly_chart(fig_pred, use_container_width=True)
+            
 
         
 with tab_simulador:
