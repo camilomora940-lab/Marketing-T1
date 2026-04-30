@@ -45,7 +45,7 @@ st.sidebar.image(logo, use_container_width=True) # Opcional: logo DII
 st.sidebar.header("Filtros")
 
 # 1. Filtro de Tiempo
-years = st.sidebar.slider("Periodo de Análisis", 1920, 2016, (2000, 2016))
+years = st.sidebar.slider("Periodo de Análisis", 1925, 2016, (2000, 2016))
 
 # 2. Filtro de Géneros
 generos = ['Action', 'Adventure', 'Animation', 'Comedy', 'Drama', 'Horror', 'Romance', 'Science_Fiction', 'Thriller','Fantasy', 'Mystery', 'Documentary', 'Family', 'War', 'Music', 'History', 'Western', 'TV_Movie', 'Foreign','Crime','Otro']
@@ -73,6 +73,14 @@ with tab_analisis:
     st.markdown("""- **Supuesto 2: Independencia de Observaciones:** Asumimos que cada película es una observación independiente,asumiendo que el éxito de una secuela o de una película de la misma franquicia se captura a través de su propio presupuesto y volumen de votos.""")
     st.markdown("---")
     st.header("Análisis de los datos")
+    st.markdown("---")
+    st.subheader("Demanda Anual con ROI a traves del tiempo")
+    df_year = df_filtered.groupby('release_year').agg({'revenue': 'sum', 'budget': 'sum'}).reset_index()
+    df_year['ROI'] = df_year['revenue'] / df_year['budget']
+    fig_year = px.line(df_year, x='release_year', y='ROI', title="<b>ROI Total por Año de Estreno</b>",
+                       labels={'release_year': 'Año de Estreno', 'ROI': 'Return on Investment (ROI)'},
+                       markers=True)
+    st.plotly_chart(fig_year, use_container_width=True, key="grafico_roi_anual")
     st.markdown("---")
     # Replicando la lógica de tu celda de "Top Revenue"
     top_10 = df_filtered.sort_values('revenue', ascending=False).head(10)
