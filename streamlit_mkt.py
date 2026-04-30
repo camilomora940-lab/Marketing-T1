@@ -150,7 +150,7 @@ with tab_analisis:
         'Productora': '0_Otros', 
         'Cantidad_Peliculas': actual_otros + suma_minoritarias
     }])
-        df_pie_final = pd.concat([df_pie_final, fila_otros_total], ignore_index=True)
+        
         
         fig_pie = px.pie(
         df_pie_final, 
