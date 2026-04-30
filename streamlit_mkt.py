@@ -68,7 +68,10 @@ st.markdown(f"**Muestra actual:** {df_filtered.shape[0]} películas filtradas.")
 
 tab_analisis, tab_modelo, tab_simulador = st.tabs(["Analisis de Datos", "Modelo de regresión", "Simulador Estrategico"])
 with tab_analisis:
-
+    st.header("Supuestos que utilizamos para el análisis")
+    st.markdown("""- **Supuesto 1: Deflación de Ingresos:** Para comparar películas de diferentes años, ajustamos los ingresos a dólares constantes usando el IPC. Esto nos permite analizar la demanda real sin distorsiones por inflación.""")
+    st.markdown("""- **Supuesto 2: Independencia de Observaciones:** Asumimos que cada película es una observación independiente,asumiendo que el éxito de una secuela o de una película de la misma franquicia se captura a través de su propio presupuesto y volumen de votos.""")
+    st.markdown("---")
     st.header("Análisis de los datos")
     st.markdown("---")
     # Replicando la lógica de tu celda de "Top Revenue"
@@ -89,7 +92,7 @@ with tab_analisis:
                                      mode='markers', marker=dict(size=12),
                                      name=row['title']))
     st.plotly_chart(fig_top, use_container_width=True)
-    st.subheader("1.-Análisis de Rentabilidad por Género")
+    st.subheader("Análisis de Recaudación por Género")
     generos_lista = [
     'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
     'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 
@@ -109,7 +112,7 @@ with tab_analisis:
     x='Revenue_Promedio', 
     y='Genero',
     orientation='h',
-    title="<b>Revenue Promedio por Género (Incluyendo Nichos)</b>",
+    title="<b>Revenue Promedio por Género </b>",
     labels={'Revenue_Promedio': 'Revenue Promedio (USD)', 'Genero': 'Género'},
     color='Revenue_Promedio',
     color_continuous_scale='Blues',
@@ -128,22 +131,37 @@ with tab_analisis:
 )
     fig_generos.update_traces(textposition='outside', cliponaxis=False)
     st.plotly_chart(fig_generos, use_container_width=True, key="grafico_generos_completo")
-    #ahora otro gráfico con lo mismo pero logaritmico para ver mejor las diferencias entre los géneros con menor revenue
-    fig_generos_log = px.bar(df_promedios, x='Revenue_Promedio', y='Genero', orientation='h',
-                             title="<b>Revenue Promedio por Género (Escala Logarítmica)</b>",
-                             labels={'Revenue_Promedio': 'Revenue Promedio (USD)', 'Genero': 'Género'},
-                             color='Revenue_Promedio', color_continuous_scale='Blues',
-                                text_auto='.2s', log_x=True, hover_data={'Cantidad': True, 'Revenue_Promedio': ':$,.0f'})
-    fig_generos_log.update_layout(
-        height=900,
-        margin=dict(l=150, r=50),
-        xaxis_title="Revenue Promedio (USD, Escala Logarítmica)",
-        yaxis_title="",
-        coloraxis_showscale=False
-    )
-    fig_generos_log.update_traces(textposition='outside', cliponaxis=False)
-    st.plotly_chart(fig_generos_log, use_container_width=True, key="grafico_generos_log")
 
+    st.subheader("Participación de las productoras en el mercado")
+    #Grafico de torta para mostrar la participación de las productoras en el mercado numero de peliculas de cada una)
+    if 'compania_principal_agrupadas2' in df_filtered.columns:
+        df_prod_count = df_filtered['compania_principal_agrupadas2'].value_counts().reset_index()
+        df_prod_count.columns = ['Productora', 'Cantidad_Peliculas']
+        total_pelis = df_prod_count['Cantidad_Peliculas'].sum()
+        df_prod_count['Porcentaje'] = (df_prod_count['Cantidad_Peliculas'] / total_pelis) * 100
+        umbral=1.5
+        mask_minoritarias=(df_prod_count['Porcentaje'] < umbral) & (df_prod_count['Productora'] != '0_Otros')
+        suma_minoritarias = df_prod_count.loc[mask_minoritarias, 'Cantidad_Peliculas'].sum()
+        actual_otros=0
+        if '0_Otros' in df_prod_count['Productora'].values:
+            actual_otros = df_prod_count.loc[df_prod_count['Productora'] == '0_Otros', 'Cantidad_Peliculas'].values[0]
+        df_pie_final=df_prod_count[~mask_minoritarias & (df_prod_count['Productora'] != '0_Otros')].copy()
+        fila_otros_total = pd.DataFrame([{
+        'Productora': '0_Otros', 
+        'Cantidad_Peliculas': actual_otros + suma_minoritarias
+    }])
+        df_pie_final = pd.concat([df_pie_final, fila_otros_total], ignore_index=True)
+        
+        fig_pie = px.pie(
+        df_pie_final, 
+        values='Cantidad_Peliculas', 
+        names='Productora', 
+        title="<b>Participación de Productoras en el Mercado</b>",
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_pie, use_container_width=True, key="grafico_participacion_productoras")
+    st.markdown("---")
     st.subheader("Análisis de las Top 10 Productoras")
     col_prod = 'compania_principal_agrupadas2'
     if col_prod in df_filtered.columns:
@@ -250,7 +268,12 @@ with tab_modelo:
         st.caption("Tras el logaritmo, los datos se distribuyen de forma campana (normal), ideal para el modelo OLS.")
         st.markdown("---")
     with st.container():
-        st.subheader("Estimación del Modelo Seleccionado")
+        st.subheader("Matriz de correlación (variables cuantitativas)")
+        numeric_cols = ['log_budget', 'log_revenue', 'log_vote_count', 'vote_average']
+        corr_matrix = df_filtered[numeric_cols].corr()
+        fig_corr = px.imshow(corr_matrix, text_auto=True, color_continuous_scale='RdBu_r', title="Correlación entre Variables Cuantitativas")
+        st.plotly_chart(fig_corr, use_container_width=True)
+        st.markdown("---")
         genre_cols = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
               'Documentary', 'Otro', 'Family', 'Fantasy', 'Foreign', 
               'History', 'Horror', 'Music', 'Mystery', 'Romance', 
