@@ -245,6 +245,16 @@ with tab_analisis:
         xaxis=dict(tickmode='array', tickvals=list(range(1, 13)), ticktext=['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']),
         xaxis_title="Mes del Año")
     st.plotly_chart(fig_mes, use_container_width=True, key="grafico_estacionalidad")
+    st.subheader("Importancia del idioma en el exito comercial")
+    df_idioma = df_filtered.groupby('is_english').agg({'revenue': 'mean', 'title': 'count'}).reset_index()
+    df_idioma['Idioma'] = df_idioma['is_english'].apply
+    df_idioma['Idioma'] = df_idioma['is_english'].apply(lambda x: 'Inglés' if x == 1 else 'No Inglés')
+    fig_idioma = px.bar(df_idioma, x='Idioma', y='revenue', title="<b>Revenue Promedio por Idioma Original</b>",
+                        labels={'revenue': 'Revenue Promedio (USD)', 'Idioma': 'Idioma Original'},
+                        color='revenue', color_continuous_scale='PuRd', text_auto='.2s', hover_data={'title': True})
+    fig_idioma.update_layout(xaxis_title="Idioma Original")
+    st.plotly_chart(fig_idioma, use_container_width=True, key="grafico_idioma")
+    
 
 # --- TAB 2: TRANSFORMACIÓN LOGARÍTMICA ---
 with tab_modelo:
