@@ -201,6 +201,8 @@ with tab_analisis:
               'Documentary', 'Otro', 'Family', 'Fantasy', 'Foreign', 
               'History', 'Horror', 'Music', 'Mystery', 'Romance', 
               'Science_Fiction', 'TV_Movie', 'Thriller', 'War', 'Western']
+    mapear_mes={1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
+                7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'}
     for prod in top_10_nombres:
         peli_top = df_filtered[df_filtered[col_prod] == prod].sort_values('revenue', ascending=False).iloc[0]
         generos_asociados = [g for g in genre_cols_2 if g in peli_top and peli_top[g] == 1]
@@ -210,6 +212,7 @@ with tab_analisis:
             'Revenue': peli_top['revenue'],
             'Presupuesto': peli_top['budget'],
             'año': peli_top['release_year'],
+            'mes': mapear_mes.get(peli_top['release_month'], 'Desconocido'),   # está en numeros del 1 al 12, si quieres mostrar el nombre del mes, puedes usar un diccionario para mapearlo
             'Generos': generos_texto})
     df_estrellas=pd.DataFrame(mejores_peliculas).sort_values('Revenue', ascending=False).head(10)
     cols_por_fila = 5
@@ -221,6 +224,10 @@ with tab_analisis:
             st.write(f"**Géneros:** {row['Generos']}")
             st.write(f"**Revenue:** ${row['Revenue']/1e6:.2f}M")
             st.write(f"**Presupuesto:** ${row['Presupuesto']/1e6:.2f}M")
+            #año y mes de estreno
+            st.write(f"**Año de Estreno:** {row['año']}")
+            st.write(f"**Mes de Estreno:** {row['mes']}")
+            #  # Si tienes la columna del mes, cámbiala aquí
             poster = get_movie_poster(row['Pelicula'],row['año'])
             st.image(poster, caption=row['Pelicula'])
             if i < 5:
